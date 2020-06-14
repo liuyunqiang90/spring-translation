@@ -206,6 +206,7 @@ Autowiring mode | Autowiring Collaborators|1.4.5. Autowiring Collaborators
 Lazy initialization mode|Lazy-initialized Beans|1.4.4. Lazy-initialized Beans
 Initialization method|Initialization Callbacks|1.6.1.1.Initialization Callbacks
 Destruction method|Destruction Callbacks|1.6.1.2.Destruction Callbacks  
+
 除了包含如何创建特定Bean的信息之外，ApplicationContext实现还允许将外部创建的对象交给spring管理。通过getBeanFactory() 方法从 ApplicationContextd的BeanFactory中返回默认实现类DefaultListableBeanFactory。DefaultListableBeanFactory 提供了registerSingleton(..) 和 registerBeanDefinition(..) 方法。然而，一般的应用程序还是通过元数据方式定义一个bean。  
 ~~~
 注意：尽早的注册bean和手工提供的单例实例,以便容器在自动装配和其检查步骤中正确地推理它们。虽然在某种程度上支持覆盖现有元数据和现有单例实例，但官方不支持正在运行时（与对工厂的实时访问同时）对新bean的注册，并且可能导致并发访问异常，bean容器中的状态不一致或者二者都有。
