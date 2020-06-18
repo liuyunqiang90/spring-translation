@@ -346,5 +346,26 @@ public class DefaultServiceLocator {
 推断特定bean的运行时类型并非易事。Bean元数据定义的类只是初始类引用，可能与声明的工厂方法或者是FactoryBean结合使用，这可能导致Bean的运行时类型不同，或者通过实例工厂方法下完全不进行设置（通过指定的factory-bean名称解析）。此外，AOP代理可以使用基于接口的代理包装bean实例，而目标Bean的实际类型（仅是其实现的接口）的暴露程度有限。***（这段很不理解，以后理解了回来进一步说明）***  
 推断特定bean的实际运行时类型的推荐方法是对指定bean名称的调用BeanFactory.getType方法。 这考虑了以上所有情况，并返回了通过调用BeanFactory.getBean将针对同一bean名称返回的对象类型。（不理解）  
 ## 1.4. Dependencies(依赖关系)  
+典型的企业级应用程序不包含单个对象（或Spring中所说的bean）。即使是最简单的应用程序，也有一些对象可以协同工作，以呈现最终用户视为一致的应用程序。下一部分将说明如何从定义多个独立的Bean到实现对象协作来实现目标应用程序。  
+### 1.4.1. Dependency Injection（依赖注入）  
+依赖注入(DI)是一个过程，对象定义他们的依赖（也就是，该对象工作所需要的）只是通过构造函数的参数，工厂方法的参数，或者属性被注入到对象实例，在该对象被构造或者从一个工厂方法返回（翻译的不好，大概的意思就是通过构造函数，工厂方法和属性注入来实现DI的）。当容器创建bean的后，它注入这些依赖。此过程从根本上讲是bean本身通过使用类的构造方法来控制自己的实例化或者定位依赖的位置（因此叫做IOC）  
+使用DI原理，代码更加简洁，当为对象提供依赖项时，解耦会更有效。该对象不查找其依赖项，并且不知道依赖项或类的位置。结果，您的类变得更易于测试，尤其是当依赖项依赖于接口或抽象基类时，它们允许在单元测试中使用存根或模拟实现。  
+DI主要是2中形式：Constructor-based dependency injection 和Setter-based dependency injection。  
+#### 1.4.1.1. Constructor-based Dependency Injection(构造函数)  
+基于构造函数的DI是容器通过调用包含多个参数的构造函数来完成的，每个参数表示一个依赖项。这等同于调用带有特定参数的静态工厂方法来构造Bean，并且本次讨论也将构造函数和静态工厂方法的参数视为类似。 以下示例显示了只通过构造函数来进行依赖项的注入：  
+~~~
+public class SimpleMovieLister {
 
- 
+    // the SimpleMovieLister has a dependency on a MovieFinder
+    private MovieFinder movieFinder;
+
+    // a constructor so that the Spring container can inject a MovieFinder
+    public SimpleMovieLister(MovieFinder movieFinder) {
+        this.movieFinder = movieFinder;
+    }
+
+    // business logic that actually uses the injected MovieFinder is omitted...
+}
+~~~  
+注意，该类没有什么特别的。 它是一个POJO，不依赖于容器特定的接口，基类或注释。  
+#### 1.4.1.2. Constructor Argument Resolution(构造函数参数解析)  
