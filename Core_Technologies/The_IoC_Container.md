@@ -369,3 +369,240 @@ public class SimpleMovieLister {
 ~~~  
 注意，该类没有什么特别的。 它是一个POJO，不依赖于容器特定的接口，基类或注释。  
 #### 1.4.1.2. Constructor Argument Resolution(构造函数参数解析)  
+当使用参数的时候，构造函数参数被解析。如果bean的构造函数参数不存在歧义，构造函数参数的顺序就是实例化bean时提供给构造器的顺序。考虑下下面的例子：  
+~~~
+package x.y;
+
+public class ThingOne {
+
+    public ThingOne(ThingTwo thingTwo, ThingThree thingThree) {
+        // ...
+    }
+}
+~~~  
+假设ThingTwo和ThingThree类没有通过继承关联，并且不存在歧义。因此，以下配置可以正常工作，并且您无需在\<constructor-arg />元素中显式指定构造函数参数索引或类型。  
+~~~
+<beans>
+    <bean id="beanOne" class="x.y.ThingOne">
+        <constructor-arg ref="beanTwo"/>
+        <constructor-arg ref="beanThree"/>
+    </bean>
+
+    <bean id="beanTwo" class="x.y.ThingTwo"/>
+
+    <bean id="beanThree" class="x.y.ThingThree"/>
+</beans>
+~~~  
+当引用另一个bean时，类型是已知的，并且可以发生匹配（与前面的示例一样）。 当使用简单类型（例如\<value> true </ value>）时，Spring无法确定值的类型，因此在没有帮助的情况下无法按类型进行匹配。 考虑以下类别：  
+~~~
+package examples;
+
+public class ExampleBean {
+
+    // Number of years to calculate the Ultimate Answer
+    private int years;
+
+    // The Answer to Life, the Universe, and Everything
+    private String ultimateAnswer;
+
+    public ExampleBean(int years, String ultimateAnswer) {
+        this.years = years;
+        this.ultimateAnswer = ultimateAnswer;
+    }
+}
+~~~
+***1、Constructor argument type matching***  
+在上述情况下，如果您通过使用type属性明确指定构造函数参数的类型，则容器可以使用简单类型进行匹配。 如以下示例所示：  
+~~~
+<bean id="exampleBean" class="examples.ExampleBean">
+    <constructor-arg type="int" value="7500000"/>
+    <constructor-arg type="java.lang.String" value="42"/>
+</bean>
+~~~  
+***2、Constructor argument index***  
+您可以使用index属性来显式指定构造函数参数的索引，如以下示例所示：  
+~~~
+<bean id="exampleBean" class="examples.ExampleBean">
+    <constructor-arg index="0" value="7500000"/>
+    <constructor-arg index="1" value="42"/>
+</bean>
+~~~  
+除了解决多个简单值的歧义之外，指定索引还可以解决构造函数具有两个相同类型的参数引起的歧义。  
+~~~
+注意：索引从0开始。
+~~~  
+***3、Constructor argument name***  
+还可以使用构造函数参数名称来消除歧义，如以下示例所示：  
+~~~
+<bean id="exampleBean" class="examples.ExampleBean">
+    <constructor-arg name="years" value="7500000"/>
+    <constructor-arg name="ultimateAnswer" value="42"/>
+</bean>
+~~~  
+请记住，要立即使用该功能，必须在启用调试标志的情况下编译代码，以便Spring可以从构造函数中查找参数名称。如果您不能或不想使用debug标志编译代码，则可以使用@ConstructorProperties JDK注释显式命名构造函数参数。 然后，样本类必须如下所示：  
+~~~
+package examples;
+
+public class ExampleBean {
+
+    // Fields omitted
+
+    @ConstructorProperties({"years", "ultimateAnswer"})
+    public ExampleBean(int years, String ultimateAnswer) {
+        this.years = years;
+        this.ultimateAnswer = ultimateAnswer;
+    }
+}
+~~~  
+### 1.4.1.2. Setter-based Dependency Injection (基于setter的依赖注入)  
+通过调用无参数构造函数或无参数静态工厂方法来实例化bean之后，容器通过在bean上调用setter方法来完成DI。  
+下面的例子展示了，一个class只能被DI通过setter方法。这个class是个常规的java类。它是一个POJO，不依赖于容器特定的接口，基类或注释。  
+~~~
+public class SimpleMovieLister {
+
+    // the SimpleMovieLister has a dependency on the MovieFinder
+    private MovieFinder movieFinder;
+
+    // a setter method so that the Spring container can inject a MovieFinder
+    public void setMovieFinder(MovieFinder movieFinder) {
+        this.movieFinder = movieFinder;
+    }
+
+    // business logic that actually uses the injected MovieFinder is omitted...
+}
+~~~  
+ApplicationContext 支持***构造器注入和setter方法注入*** 。在通过构造函数方法注入了某些依赖项之后，它还支持基于setter的DI(也就是说2种方法可以混用)。您以BeanDefinition的形式配置依赖项，将其与PropertyEditor实例结合使用，以将属性从一种格式转换为另一种格式。但是，大多数Spring用户并不直接（即以编程方式）使用这些类，而是使用XML定义bean，带注解的组件（即以@ Component，@ Controller等进行注释的类）或基于Java的@Configuration类@Bean方法来工作的。然后将这些源在内部转换为BeanDefinition的实例，并用于加载整个Spring IoC容器实例。  
+~~~
+        Constructor-based or setter-based DI?
+由于您可以混合使用基于构造函数的DI和基于setter的DI，因此将构造函数用于强制性依赖项并将setter方法或配置方法用于可选依赖性是一个很好的经验法则。请注意，可以在setter方法上使用@Required注解，以使该属性成为必需的依赖项。 但是，最好使用带有参数构造函数注入。
+Spring团队通常提倡构造函数注入，因为它可以让您将应用程序组件实现为不可变的对象，并确保所需的依赖项不为null。此外，构造函数注入的组件始终以完全初始化的状态返回到客户端（调用）代码。附带说明一下，构造函数带有大量的参数是一种不好的，这表明该类可能承担了太多的职责，应将其重构以更好地解决关注点分离问题。
+Setter注入主要应用于在类中可分配合理的默认值的可选依赖项。否则，必须在使用注入对象的时候进行非空检查。setter注入的一个好处是，setter方法可使该类的对象在以后重新配置或重新注入。 因此，通过JMX MBean进行管理是用于setter注入的引人注目的用例。
+为class使用最适合的DI。 有时，在处理您没有源代码的第三方类时，将为您做出选择。 例如，如果第三方类未公开任何setter方法，则构造函数注入可能是DI的唯一可用形式。
+~~~  
+#### 1.4.1.3. Dependency Resolution Process(依赖的解析过程)  
+容器对bean依赖项进行解析，如下步骤所示：  
+
+- ApplicationContext 被创建并且初始化配置文件中配置的所有bean。可以通过XML，java code 和注解来进行配置。  
+- 对于每个bean，其依赖关系都以属性，构造函数参数或static-factory方法的参数的形式表示（如果使用它替代构造函数）。 当创建Bean时，会将这些依赖项提供给Bean。  
+- 每个属性或构造函数参数都是要设置值的实际定义，或者是对容器中另一个bean的引用。  
+- 每个值的属性或构造函数参数都将从其指定的格式转换为该属性或构造函数参数的实际类型。 默认情况下，Spring可以将以字符串格式提供的值转换为所有内置类型，例如int，long，String，boolean等。  
+
+在创建容器时，Spring容器会验证每个bean的配置。但是，在实际创建Bean之前，不会设置Bean的属性值。创建容器时，将创建具有单例作用域并设置为预先实例化（默认）的Bean。作用域被定义在1.5. Bean Scopes。否则，只有bean被需要的时候，才会被实例化。创建和分配Bean的依赖关系及其依赖关系的依赖关系（依此类推）时，可能会导致创建出一个Bean图。请注意，这些依赖项之间的不匹配可能会在后期出现-即在首次创建受影响的bean时。  
+~~~
+            Circular dependencies(循环依赖)
+如果主要使用构造函数注入，则可能会产生无法解决的循环依赖问你题。
+例如：通过构造函数注入时，A类需要一个B的实例，并且B类也需要一个A类的实例。如果您配置了将类A和B相互注入的bean，则Spring IoC容器会在运行时检测到此循环引用，并抛出BeanCurrentlyInCreationException异常。
+一种可能的解决方案是编辑某些类的源代码，将通过构造函数的配置方式改成setter注入方式。或者，避免构造函数注入，而仅使用setter注入。换句话说，尽管不建议这样做，但是您可以使用setter注入配置循环依赖项。与典型情况（没有循环依赖关系）不同，循环依赖的问题在于bean A和bean B在完成实例化之前谁先被注入(类似于先有鸡还是先有蛋的问题)。
+~~~  
+通常，您可以相信Spring做正确的事。它在容器加载时检测配置问题，例如对不存在Bean的引用和循环依赖问题。在实际创建bean时，Spring设置属性并尽可能晚地解决依赖关系。这意味着如果创建对象或其依赖项之一存在问题，在正确加载了Spring的容器以后可以在您请求对象时生成异常-例如，由于缺少属性或存在无效属性。这可能会延迟某些配置问题的可见性，这就是为什么默认情况下ApplicationContext实现会预先实例化单例bean的原因。在实际需要使用这些bean之前要花一些时间和内存，您会在创建ApplicationContext时发现配置问题，而不是以后。您仍然可以覆盖此默认行为，以便单例bean延迟初始化，而不是预先实例化。  
+如果不存在循环依赖关系，则在将一个或多个协作bean注入到依赖bean中时，每个协作bean都将在注入到依赖bean中之前被完全配置。这意味着，如果bean A依赖于bean B，则Spring IoC容器会在调用bean A的setter方法之前完全配置bean B。换句话说，实例化该Bean（如果它不是预先实例化的单例），设置其依赖关系，并调用相关的生命周期方法（例如配置的init方法（Initialization Callbacks）或InitializingBean回调方法（ InitializingBean callback method））。  
+#### 1.4.1.4. Examples of Dependency Injection(DI的例子)  
+下面的例子使用xml配置文件通过setter方法DI。Spring XML配置文件的一小部分指定了一些bean定义，如下所示：  
+~~~
+<bean id="exampleBean" class="examples.ExampleBean">
+    <!-- setter injection using the nested ref element -->
+    <property name="beanOne">
+        <ref bean="anotherExampleBean"/>
+    </property>
+
+    <!-- setter injection using the neater ref attribute -->
+    <property name="beanTwo" ref="yetAnotherBean"/>
+    <property name="integerProperty" value="1"/>
+</bean>
+
+<bean id="anotherExampleBean" class="examples.AnotherBean"/>
+<bean id="yetAnotherBean" class="examples.YetAnotherBean"/>
+~~~  
+以下示例显示了相应的ExampleBean类：  
+~~~
+public class ExampleBean {
+
+    private AnotherBean beanOne;
+
+    private YetAnotherBean beanTwo;
+
+    private int i;
+
+    public void setBeanOne(AnotherBean beanOne) {
+        this.beanOne = beanOne;
+    }
+
+    public void setBeanTwo(YetAnotherBean beanTwo) {
+        this.beanTwo = beanTwo;
+    }
+
+    public void setIntegerProperty(int i) {
+        this.i = i;
+    }
+}
+~~~  
+在前面的示例中，声明了setter以与XML文件中指定的属性匹配。 以下示例使用基于构造函数的DI：  
+~~~
+<bean id="exampleBean" class="examples.ExampleBean">
+    <!-- constructor injection using the nested ref element -->
+    <constructor-arg>
+        <ref bean="anotherExampleBean"/>
+    </constructor-arg>
+
+    <!-- constructor injection using the neater ref attribute -->
+    <constructor-arg ref="yetAnotherBean"/>
+
+    <constructor-arg type="int" value="1"/>
+</bean>
+
+<bean id="anotherExampleBean" class="examples.AnotherBean"/>
+<bean id="yetAnotherBean" class="examples.YetAnotherBean"/>
+~~~  
+以下示例显示了相应的ExampleBean类：   
+~~~
+public class ExampleBean {
+
+    private AnotherBean beanOne;
+
+    private YetAnotherBean beanTwo;
+
+    private int i;
+
+    public ExampleBean(
+        AnotherBean anotherBean, YetAnotherBean yetAnotherBean, int i) {
+        this.beanOne = anotherBean;
+        this.beanTwo = yetAnotherBean;
+        this.i = i;
+    }
+}
+~~~  
+bean定义中指定的构造函数参数用作ExampleBean构造函数的参数。  
+现在考虑该示例的一个变体，在该变体中，不是使用构造函数，而是指示Spring调用静态工厂方法以返回对象的实例：  
+~~~
+<bean id="exampleBean" class="examples.ExampleBean" factory-method="createInstance">
+    <constructor-arg ref="anotherExampleBean"/>
+    <constructor-arg ref="yetAnotherBean"/>
+    <constructor-arg value="1"/>
+</bean>
+
+<bean id="anotherExampleBean" class="examples.AnotherBean"/>
+<bean id="yetAnotherBean" class="examples.YetAnotherBean"/>
+~~~  
+以下示例显示了相应的ExampleBean类：   
+~~~
+public class ExampleBean {
+
+    // a private constructor
+    private ExampleBean(...) {
+        ...
+    }
+
+    // a static factory method; the arguments to this method can be
+    // considered the dependencies of the bean that is returned,
+    // regardless of how those arguments are actually used.
+    public static ExampleBean createInstance (
+        AnotherBean anotherBean, YetAnotherBean yetAnotherBean, int i) {
+
+        ExampleBean eb = new ExampleBean (...);
+        // some other operations...
+        return eb;
+    }
+}
+~~~  
+静态工厂方法的参数由\<constructor-arg />元素提供，与实际使用构造函数时完全相同。factory方法返回的类的类型不必与包含静态工厂方法的类的类型相同(尽管在此示例中是)。实例（非静态）工厂方法可以以基本上相同的方式使用（除了使用factory-bean属性代替class属性之外），因此在此不讨论这些细节。  
+### 1.4.2. Dependencies and Configuration in Detail
