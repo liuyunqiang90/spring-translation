@@ -605,4 +605,219 @@ public class ExampleBean {
 }
 ~~~  
 静态工厂方法的参数由\<constructor-arg />元素提供，与实际使用构造函数时完全相同。factory方法返回的类的类型不必与包含静态工厂方法的类的类型相同(尽管在此示例中是)。实例（非静态）工厂方法可以以基本上相同的方式使用（除了使用factory-bean属性代替class属性之外），因此在此不讨论这些细节。  
-### 1.4.2. Dependencies and Configuration in Detail
+### 1.4.2. Dependencies and Configuration in Detail(依赖和配置详情)  
+如上一节所述，您可以将Bean属性和构造函数参数定义为对其他Bean的依赖。Spring的基于XML的配置为此目的提供了\<property />和\<constructor-arg />标签。  
+#### 1.4.2.1. Straight Values (Primitives, Strings, and so on)  
+\<property />标签的value属性将属性或构造函数参数指定为人类可读的字符串表示形式。 Spring的转换服务（3.4.4. The ConversionService API）用于将这些值从字符串转换为属性或参数的实际类型。 以下示例显示了设置的各种值：  
+~~~
+<bean id="myDataSource" class="org.apache.commons.dbcp.BasicDataSource" destroy-method="close">
+    <!-- results in a setDriverClassName(String) call -->
+    <property name="driverClassName" value="com.mysql.jdbc.Driver"/>
+    <property name="url" value="jdbc:mysql://localhost:3306/mydb"/>
+    <property name="username" value="root"/>
+    <property name="password" value="masterkaoli"/>
+</bean>
+~~~  
+下面的示例使用p-namespace进行更简洁的XML配置：  
+~~~
+<beans xmlns="http://www.springframework.org/schema/beans"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xmlns:p="http://www.springframework.org/schema/p"
+    xsi:schemaLocation="http://www.springframework.org/schema/beans
+    https://www.springframework.org/schema/beans/spring-beans.xsd">
+
+    <bean id="myDataSource" class="org.apache.commons.dbcp.BasicDataSource"
+        destroy-method="close"
+        p:driverClassName="com.mysql.jdbc.Driver"
+        p:url="jdbc:mysql://localhost:3306/mydb"
+        p:username="root"
+        p:password="masterkaoli"/>
+
+</beans>
+~~~  
+前面的XML更简洁。但是错误的被发现是在运行时，而不是设计时，除非你使用IDE（例如，IDEA或者 Spring Tools for Eclipse），它可以帮助你在创建bean之后，自动完成校验。所以强烈建议使用IDE。　　
+你也可以配置java.util.Properties实例,如下:  
+~~~
+<bean id="mappings"
+    class="org.springframework.context.support.PropertySourcesPlaceholderConfigurer">
+
+    <!-- typed as a java.util.Properties -->
+    <property name="properties">
+        <value>
+            jdbc.driver.className=com.mysql.jdbc.Driver
+            jdbc.url=jdbc:mysql://localhost:3306/mydb
+        </value>
+    </property>
+</bean>
+~~~  
+Spring容器通过使用JavaBeans的PropertyEditor机制将\<value />元素内的文本转换为java.util.Properties实例。这是一个很好的快捷方式，并且是Spring团队偏爱使用的几个地方之一。 值属性样式上的嵌套\<value />元素。  
+##### 1.4.2.1.1 The idref element  
+idref元素只是一种防错方法，可以将容器中另一个bean的id（字符串值-不是引用）传递给\<constructor-arg />或\<property />元素。 以下示例显示了如何使用它：  
+~~~
+<bean id="theTargetBean" class="..."/>
+
+<bean id="theClientBean" class="...">
+    <property name="targetName">
+        <idref bean="theTargetBean"/>
+    </property>
+</bean>
+~~~  
+前面的bean定义片段（在运行时）与下面的片段完全等效：  
+~~~
+<bean id="theTargetBean" class="..." />
+
+<bean id="client" class="...">
+    <property name="targetName" value="theTargetBean"/>
+</bean>
+~~~  
+第一种形式优于第二种形式，因为使用idref标记可使容器在部署时验证所引用Bean实际上是否存在。在第二个形式中，不对传递到客户端的bean的targetName属性值执行验证。 拼写错误仅在实际实例化客户端bean时才发现（可能会导致致命的结果）。 如果客户Bean是原型Bean，则可能在部署容器很久之后才发现此错字和所产生的异常。  
+~~~
+注意:在4.0 Bean XSD中不再支持idref元素上的local属性，因为它不再提供常规Bean引用上的值。 升级到4.0模式时，将现有的idref本地引用更改为idref bean。
+~~~  
+\<idref />元素一个常用的地方（至少在Spring 2.0之前的版本中）是在ProxyFactoryBean的bean中定义的AOP拦截器（6.4.1. Basics）的配置，指定拦截器名称时使用/<idref />元素可防止您拼写错误的拦截器ID。  
+#### 1.4.2.1. References to Other Beans (Collaborators)[依赖其他的bean]  
+ref元素是\<constructor-arg />或\<property />定义元素内的最后一个元素。在这里，ref可以指定依赖的属性或者对象。引用的bean是要设置其属性的bean的依赖关系，并且在设置属性之前根据需要对其进行初始化。（如果协作者是单例bean，则它可能已经由容器初始化了。）所有引用最终都是对另一个对象的引用。通过bean或者parent属性进行作用域和验证取决于您是指定另一个对象的ID或名称。（翻译的乱七八糟）  
+通过\<ref />标记的bean属性指定目标bean是最通用的形式，并且允许创建对同一容器或父容器中任何bean的引用，而不管它是否在同一XML文件中。bean属性的值可以与目标bean的id属性相同，也可以与目标bean的name属性中的值之一相同。 下面的示例演示如何使用ref元素：  
+~~~
+<ref bean="someBean"/>
+~~~  
+通过parent属性指定目标Bean将创建对当前容器的父容器中的Bean的引用。parent的值可以与目标Bean的id属性或目标Bean的name属性中的值之一相同。目标bean必须在当前容器的父容器中。主要在具有容器层次结构并且要使用与父bean名称相同的代理将现有bean包装在父容器中时，才应使用此bean参考变量。 以下展示了如何使用parent属性：  
+~~~
+<!-- in the parent context -->
+<bean id="accountService" class="com.something.SimpleAccountService">
+    <!-- insert dependencies as required as here -->
+</bean>
+~~~
+~~~
+<!-- in the child (descendant) context -->
+<bean id="accountService" <!-- bean name is the same as the parent bean -->
+    class="org.springframework.aop.framework.ProxyFactoryBean">
+    <property name="target">
+        <ref parent="accountService"/> <!-- notice how we refer to the parent bean -->
+    </property>
+    <!-- insert other configuration and dependencies as required here -->
+</bean>
+~~~
+~~~
+注意：ref元素的local属性在4.0 Bean XSD中不再受支持，因为它不再提供常规Bean引用上的值。 升级到4.0模式时，将现有的ref本地引用更改为ref bean。
+~~~  
+#### 1.4.2.3. Inner Beans  
+\<property />或\<constructor-arg />元素内的\<bean />元素定义了一个内部bean，如以下示例所示：  
+~~~
+<bean id="outer" class="...">
+    <!-- instead of using a reference to a target bean, simply define the target bean inline -->
+    <property name="target">
+        <bean class="com.example.Person"> <!-- this is the inner bean -->
+            <property name="name" value="Fiona Apple"/>
+            <property name="age" value="25"/>
+        </bean>
+    </property>
+</bean>
+~~~  
+定义内部bean不需要定义ID或者name。如果指定，则容器不使用该值作为标识符。容器在创建时也将忽略作用域标志，因为内部Bean始终是匿名的，并且始终与外部Bean一起创建。不可能独立地访问内部bean或将其注入到协作bean中而不是封装到封闭bean中。  
+作为一个特例，可以从自定义范围接收破坏回调，例如对于单例bean中包含的请求范围内的bean（不理解）。内部bean实例的创建与其包含的bean绑定在一起，但是销毁回调使它可以参与请求范围的生命周期。 这不是常见的情况。 内部bean通常只共享其包含bean的作用域（就是内部bean的作用域保持和包含他的bean一致）。  
+#### 1.4.2.4. Collections  
+\<list />，\<set />，\<map />和\<props />元素分别对应Java集合类型List，Set，Map和Properties的属性和参数。 以下示例显示了如何使用它们：  
+~~~
+<bean id="moreComplexObject" class="example.ComplexObject">
+    <!-- results in a setAdminEmails(java.util.Properties) call -->
+    <property name="adminEmails">
+        <props>
+            <prop key="administrator">administrator@example.org</prop>
+            <prop key="support">support@example.org</prop>
+            <prop key="development">development@example.org</prop>
+        </props>
+    </property>
+    <!-- results in a setSomeList(java.util.List) call -->
+    <property name="someList">
+        <list>
+            <value>a list element followed by a reference</value>
+            <ref bean="myDataSource" />
+        </list>
+    </property>
+    <!-- results in a setSomeMap(java.util.Map) call -->
+    <property name="someMap">
+        <map>
+            <entry key="an entry" value="just some string"/>
+            <entry key ="a ref" value-ref="myDataSource"/>
+        </map>
+    </property>
+    <!-- results in a setSomeSet(java.util.Set) call -->
+    <property name="someSet">
+        <set>
+            <value>just some string</value>
+            <ref bean="myDataSource" />
+        </set>
+    </property>
+</bean>
+~~~  
+map的key或者value或者set的value也可以是以下任意元素：  
+~~~
+bean | ref | idref | list | set | map | props | value | null
+~~~ 
+***Collection Merging***  
+spring容器也支持合并collections。开发者可以定义父\<list />，\<map />，\<set />或\<props />元素，并具有子\<list />，\<map />，\<set />或\<props />元素。,从父集合继承并覆盖值。 也就是说，子集合的值是合并父集合和子集合元素的结果，子集合的元素会覆盖父集合中指定的值。   
+关于合并的这一节讨论了父子bean机制。 不熟悉父bean和子bean定义的读者可以参考1.7. Bean Definition Inheritance，然后再继续。  
+下面的例子展示了collection merging:  
+~~~
+<beans>
+    <bean id="parent" abstract="true" class="example.ComplexObject">
+        <property name="adminEmails">
+            <props>
+                <prop key="administrator">administrator@example.com</prop>
+                <prop key="support">support@example.com</prop>
+            </props>
+        </property>
+    </bean>
+    <bean id="child" parent="parent">
+        <property name="adminEmails">
+            <!-- the merge is specified on the child collection definition -->
+            <props merge="true">
+                <prop key="sales">sales@example.com</prop>
+                <prop key="support">support@example.co.uk</prop>
+            </props>
+        </property>
+    </bean>
+<beans>
+~~~  
+注意子bean定义的adminEmails属性的\<props />元素上使用merge = true属性。 当子bean由容器解析并实例化后，生成的实例具有adminEmails Properties集合，其中包含将child的adminEmails集合与parent对象的adminEmails集合的合并的结果。 以下清单显示了结果：  
+~~~
+administrator=administrator@example.com
+sales=sales@example.com
+support=support@example.co.uk
+~~~  
+子属性集合的值集继承了父\<props />的所有属性元素，并且支持子值覆盖了父集合中的值。  
+合并支持\<list />，\<map />和\<set />集合类型。在\<list />元素的特定情况下，将维护与List集合类型关联的语义（即，值的有序集合的概念）。父级的值先于子级列表的所有值。 对于Map，Set和Properties集合类型，不存在排序。 因此，对于容器内部使用的关联Map，Set和Properties实现类型基础的集合类型，没有任何排序语义有效。（不懂）   
+
+***Limitations of Collection Merging（合并集合的局限性）***  
+你不可以合并不同的集合类型（例如，Map和List）。如果没注意这点，将会有合适的异常抛出。必须在下面继承的子定义中指定merge属性。在父集合定义上指定merge属性是多余的，不会导致所需的合并。  
+
+***Strongly-typed collection（强类型集合）***  
+随着Java 5中通用类型的引入，您可以使用强类型集合。也就是说，可以声明一个Collection类型，使其只能包含（例如）String元素。如果使用Spring将强类型的Collection依赖注入到Bean中，则可以利用Spring的类型转换支持，以便在将强类型的Collection实例的元素添加到Bean中之前，先将其转换为适当的类型。以下Java类和bean定义显示了如何执行此操作：  
+~~~
+public class SomeClass {
+
+    private Map<String, Float> accounts;
+
+    public void setAccounts(Map<String, Float> accounts) {
+        this.accounts = accounts;
+    }
+}
+~~~  
+~~~
+<beans>
+    <bean id="something" class="x.y.SomeClass">
+        <property name="accounts">
+            <map>
+                <entry key="one" value="9.99"/>
+                <entry key="two" value="2.75"/>
+                <entry key="six" value="3.99"/>
+            </map>
+        </property>
+    </bean>
+</beans>
+~~~  
+当准备注入something bean的accounts属性时，可以通过反射获得有关强类型Map<String，Float>的元素类型的泛型信息。 因此，Spring的类型转换基础结构将各种值元素识别为Float类型，并将字符串值（9.99、2.75和3.99）转换为实际的Float类型。  
+
+#### 1.4.2.5. Null and Empty String Values
+
