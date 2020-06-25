@@ -820,4 +820,172 @@ public class SomeClass {
 当准备注入something bean的accounts属性时，可以通过反射获得有关强类型Map<String，Float>的元素类型的泛型信息。 因此，Spring的类型转换基础结构将各种值元素识别为Float类型，并将字符串值（9.99、2.75和3.99）转换为实际的Float类型。  
 
 #### 1.4.2.5. Null and Empty String Values
+Spring将空参属性视为空字符串。 以下基于XML的配置元数据片段将email属性设置为空值（“”）。  
+~~~
+<bean class="ExampleBean">
+    <property name="email" value=""/>
+</bean>
+~~~  
+上面的例子等同于下面的java代码：  
+~~~
+exampleBean.setEmail("");
+~~~  
+用\<null/>标签来表示null值：  
+~~~
+<bean class="ExampleBean">
+    <property name="email">
+        <null/>
+    </property>
+</bean>
+~~~  
+上面的例子等同于下面的代码：  
+~~~
+exampleBean.setEmail(null);
+~~~  
+
+#### 1.4.2.6. XML Shortcut with the p-namespace  
+使用p-namespace，您可以使用bean元素的属性（替代\<property />元素）来描述依赖bean的属性值，或依赖的bean。  
+spring支持扩展基于xml规范的命名空间配置（9.1.1. The util Schema）。本章讨论的beans配置格式在XML Schema文档中定义。 但是，p命名空间未在XSD文件中定义，仅存在于Spring的核心中。  
+以下示例显示了两个XML代码段（第一个使用标准XML格式，第二个使用p-命名空间），它们可以解析为相同的结果：  
+~~~
+<beans xmlns="http://www.springframework.org/schema/beans"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xmlns:p="http://www.springframework.org/schema/p"
+    xsi:schemaLocation="http://www.springframework.org/schema/beans
+        https://www.springframework.org/schema/beans/spring-beans.xsd">
+
+    <bean name="classic" class="com.example.ExampleBean">
+        <property name="email" value="someone@somewhere.com"/>
+    </bean>
+
+    <bean name="p-namespace" class="com.example.ExampleBean"
+        p:email="someone@somewhere.com"/>
+</beans>
+~~~  
+例子所示，在这个bean中，一个被称为email的属性用p-namespace定义的方式。告知spring包含一个属性声明。就像之前提到的，p名称空间没有架构定义，因此您可以将属性的名称设置为属性名称。  
+下一个示例包括另外两个bean定义，它们都引用了另一个bean：  
+~~~
+<beans xmlns="http://www.springframework.org/schema/beans"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xmlns:p="http://www.springframework.org/schema/p"
+    xsi:schemaLocation="http://www.springframework.org/schema/beans
+        https://www.springframework.org/schema/beans/spring-beans.xsd">
+
+    <bean name="john-classic" class="com.example.Person">
+        <property name="name" value="John Doe"/>
+        <property name="spouse" ref="jane"/>
+    </bean>
+
+    <bean name="john-modern"
+        class="com.example.Person"
+        p:name="John Doe"
+        p:spouse-ref="jane"/>
+
+    <bean name="jane" class="com.example.Person">
+        <property name="name" value="Jane Doe"/>
+    </bean>
+</beans>
+~~~  
+此示例不仅包括使用p-namespace的属性值，而且还使用特殊格式来声明属性引用。鉴于第一个bean使用\<property name="spouse" ref="jane"/>方式来创建一个对jane的引用，第二个使用p:spouse-ref="jane"方式来进行引用。在这个例子中，spouse 是属性的名字，而-ref部分表示这不是一个直接值，而是对另一个bean的引用。  
+~~~
+注意：p名称空间不如标准XML格式灵活。例如，用于声明属性引用的格式与以Ref结尾的属性发生冲突，而标准XML格式则没有。
+我们建议您仔细选择您的方法，并将其传达给团队成员，以避免同时使用这三种方法生成XML文档。
+~~~  
+
+#### 1.4.2.7. XML Shortcut with the c-namespace  
+与p-namespace的XML快捷方式类似，在Spring 3.1中引入的 c-namespace允许使用内联属性来配置构造函数参数，而不是嵌套constructor-arg元素。  
+下面的例子使用c:命名空间做了和基于构造函数注入（Constructor-based Dependency Injection）相同的事：  
+~~~
+<beans xmlns="http://www.springframework.org/schema/beans"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xmlns:c="http://www.springframework.org/schema/c"
+    xsi:schemaLocation="http://www.springframework.org/schema/beans
+        https://www.springframework.org/schema/beans/spring-beans.xsd">
+
+    <bean id="beanTwo" class="x.y.ThingTwo"/>
+    <bean id="beanThree" class="x.y.ThingThree"/>
+
+    <!-- traditional declaration with optional argument names -->
+    <bean id="beanOne" class="x.y.ThingOne">
+        <constructor-arg name="thingTwo" ref="beanTwo"/>
+        <constructor-arg name="thingThree" ref="beanThree"/>
+        <constructor-arg name="email" value="something@somewhere.com"/>
+    </bean>
+
+    <!-- c-namespace declaration with argument names -->
+    <bean id="beanOne" class="x.y.ThingOne" c:thingTwo-ref="beanTwo"
+        c:thingThree-ref="beanThree" c:email="something@somewhere.com"/>
+
+</beans>
+~~~  
+c:命名空间和p:命名空间使用了相同的约定（-ref指定是多bean的引用），并且通过他们的名字来设置构造器的参数。同样，因为未在XSD模式中定义它（虽然存在于Spring内核中），所以需要在XML文件中声明它。  
+对于极少数无法使用构造函数自变量名称的情况（通常，如果字节码是在没有调试信息的情况下编译的），则可以对参数索引使用后备，如下所示：  
+~~~
+<!-- c-namespace index declaration -->
+<bean id="beanOne" class="x.y.ThingOne" c:_0-ref="beanTwo" c:_1-ref="beanThree"
+    c:_2="something@somewhere.com"/>
+~~~  
+~~~
+注意：由于XML语法的原因，索引符号要求以_开头，因为XML属性名称不能以数字开头（即使某些IDE允许）。 相应的索引符号也可用于<constructor-arg>元素，但并不常用，因为在那里的普通声明顺序就足够了。
+~~~  
+实际上，构造函数解析机制（Constructor Argument Resolution）在匹配参数方面非常有效，因此，除非您确实需要，否则我们建议在整个配置过程中使用名称表示法。  
+
+#### 1.4.2.7. Compound Property Names（复合）  
+当设置属性的时候，可以使用复合或者内嵌属性，只要路径中除最终属性名称之外的所有组件都不为空即可。 考虑以下bean定义：  
+~~~
+<bean id="something" class="things.ThingOne">
+    <property name="fred.bob.sammy" value="123" />
+</bean>
+~~~  
+something 中有一个fred 属性，fred 属性下有个bob 属性，bob 属性下sammy 属性，并且sammy 属性被赋值123。为了使这种方式可以正常使用，当构造bean的时候，something 中的fred 属性和fred中的bob 属性一定不能为null。否则，将抛出NullPointerException 异常。  
+
+### 1.4.3. Using 之depends-on  
+如果一个bean依赖于另一个bean，那就意味着一个bean被设置称为另一个bean的属性。通常你使用 \<ref/>标签完成这项操作在xml配置文件中。有时，bean之间的依赖性不太直接。例如，何时需要触发类中的静态初始值，例如用于数据库驱动注册。depends-on属性可以强制一个或者多个bean被提前初始化，以提供属性给其他bean使用。以下示例使用depends-on属性来表示对单个bean的依赖关系：  
+~~~
+<bean id="beanOne" class="ExampleBean" depends-on="manager"/>
+<bean id="manager" class="ManagerBean" />
+~~~  
+要表达对多个bean的依赖关系，请提供一个bean名称列表作为depends-on属性的值（逗号，空格和分号是有效的分隔符）：  
+~~~
+<bean id="beanOne" class="ExampleBean" depends-on="manager,accountDao">
+    <property name="manager" ref="manager" />
+</bean>
+
+<bean id="manager" class="ManagerBean" />
+<bean id="accountDao" class="x.y.jdbc.JdbcAccountDao" />
+~~~  
+~~~
+注意：Depends-on属性既可以指定初始化时间依赖性，也可以仅在单例bean的情况下指定相应的销毁时间依赖性。定义与给定bean的依赖关系的从属bean首先被销毁，然后再销毁给定bean本身。 因此，依赖也可以控制关闭顺序（也就是说被依赖的bean先销毁，在销毁bean本身）。
+~~~  
+
+### 1.4.4. Lazy-initialized Beans  
+默认情况下，作为初始化过程的一部分，ApplicationContext实现会优先创建和配置所有单例bean。通常，这种预先实例化是可取的，因为配置或周围环境中的错误会被立即发现，而不是几小时甚至几天之后。如果不希望使用此行为，则可以通过将bean定义标记为懒加载来防止对单例bean的预先实例化。懒加载告诉IOC容器，在第一次调用的时候创建实例而不是启动的时候就创建实例。  
+在XML中，通过使用lazy-init属性来进行配置：  
+~~~
+<bean id="lazy" class="com.something.ExpensiveToCreateBean" lazy-init="true"/>
+<bean name="not.lazy" class="com.something.AnotherBean"/>
+~~~  
+当前面的配置被ApplicationContext解析时，在ApplicationContext启动时不会急于预先实例化懒加载的bean，而并不是懒加载的Bean则会被实例化。  
+但是，当懒加载的bean是普通单例bean的依赖项时，ApplicationContext会在启动时初始化懒加载的bean，因为它必须满足单例的依赖关系。 懒加载的bean被注入普通的单例bean中。  
+您还可以使用\<beans />元素中的default-lazy-init属性在容器级别控制懒加载的bean，以下示例显示：  
+~~~
+<beans default-lazy-init="true">
+    <!-- no beans will be pre-instantiated... -->
+</beans>
+~~~  
+### 1.4.5. Autowiring Collaborators  
+Spring容器可以自动装配协作bean之间的关系。您可以通过检查ApplicationContext的内容，让Spring为您的bean自动装配（其他bean）。 自动装配具有以下优点：  
+
+- 自动装配可以大大减少指定属性或构造函数参数的配置。（在这方面，其他机制，如本章其他地方讨论的bean模板也很有价值。）  
+- 随着对象的发展，自动装配可以更新配置。例如，如果您需要向类添加依赖项，则无需修改配置即可自动配置该依赖项。因此，自动装配在开发过程中特别有用，而不必担心当代码库变得更稳定时切换到显式接线的选择。  
+
+当使用xml配置时（参考Dependency Injection），你可以为一个bean指定自动装配模型，，通过\<bean>标签的autowire 属性。自动装配有4种模式。您可以为每个bean指定自动装配模型，因此也可以指定哪个bean需要自动装配。 下表描述了四种自动装配模式：  
+
+Table 2. Autowiring modes
+Mode|Explanation
+---|---|  
+no | （默认）无自动装配。 Bean引用必须由ref元素定义。 对于较大的部署，建议不要更改默认设置，因为明确指定协作者可以提供更好的控制和清晰度。 在某种程度上，它记录了系统的结构。  
+byName|通过属性名称自动装配。Spring寻找与需要自动装配的属性同名的bean。例如，如果bean定义被设置为按名称自动装配，并且包含一个master属性（即，它具有setMaster（..）方法），则Spring将查找一个名为master的bean定义，并使用它来设置属性。注意，必须提供set方法。  
+byType|如果容器中恰好存在一个该属性类型的bean，则使用该属性自动装配。 如果存在多个错误，则将引发致命异常，这表明您不能对该bean使用byType自动装配。 如果没有匹配的bean，则什么都不会发生（未设置该属性）。注意，必须提供set方法。
+constructor|与byType类似，但适用于构造函数参数。 如果容器中不存在构造函数参数所需要bean，则将引发致命错误。  
 
