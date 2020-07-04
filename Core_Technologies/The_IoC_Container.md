@@ -1209,4 +1209,271 @@ websocket|将单个bean定义的作用域限定为WebSocket的生命周期。 �
 ~~~
 
 ### 1.5.1. The Singleton Scope  
+容器只管理一个单例bean的共享实例，所有的请求都将返回同一个bean。  
+换句话说，当您定义一个beanDefinition并且其作用域为单例时，Spring IoC容器将为该beanDefinition所定义的对象创建一个实例。这个单例对象将会被放在缓存中（也就是单例bean的缓存），随后的请求，返回的bean都是从缓存拿到的。下面的图片展示了单例bean如何工作：  
+![singleBean](./image/singleBean.png)  
+Spring的“单例bean”概念与 Gang of Four (GoF)  一书中定义的单例模式有所不同。GoF单例对对象的范围进行硬编码，这样每个ClassLoader只能创建一个特定类的一个实例。最好将Spring单例的范围描述为每个容器和每个bean。这意味着，如果您在单个Spring容器中为具体类定义一个bean，则Spring容器通过beanDefiniton创建唯一一个实例。spring中单例作用域是默认的。在xml中定义一个单例bean，可以向如下操作:  
+~~~
+<bean id="accountService" class="com.something.DefaultAccountService"/>
 
+<!-- the following is equivalent, though redundant (singleton scope is the default) -->
+<bean id="accountService" class="com.something.DefaultAccountService" scope="singleton"/>
+~~~  
+
+### 1.5.2. The Prototype Scope  
+原型bean，每次请求将返回一个全新的实例。也就是说，该Bean被注入到另一个Bean中，或者您可以通过容器上的getBean()方法调用来请求它。通常，应将原型作用域用于所有有状态Bean，将单例作用域用于无状态Bean。  
+下图说明了Spring原型范围：  
+![Prototype ](./image/prototype.png)  
+（数据访问对象（DAO）通常不配置为原型，因为通常DAO不拥有任何对话状态。对于我们而言，重用单例图的核心更为容易。）  
+xml配置如下：  
+~~~
+<bean id="accountService" class="com.something.DefaultAccountService" scope="prototype"/>
+~~~  
+与其他作用域相反，Spring不管理原型Bean的完整生命周期。容器实例化，配置或组装原型对象，然后将其交给客户端，而无需对该原型实例的进一步记录。因此，尽管在不考虑作用域的情况下在，所有对象都会了调用初始化生命周期的回调方法，但在原型的情况下，不会调用配置了的销毁生命周期的回调放法。客户端代码必须清除原型作用域内的对象，并释放原型Bean拥有的昂贵资源。为了使Spring容器释放原型作用下的bean所拥有的资源，请尝试使用自定义bean后处理器（1.8.1. Customizing Beans by Using a BeanPostProcessor），该处理器包含对需要清除的bean的引用。    
+在某些方面，Spring容器在原型作用域Bean方面的角色是Java new运算符的替代。 超过该时间点的所有生命周期管理必须由客户端处理。 （有关Spring容器中bean的生命周期的详细信息，请参阅生命周期回调（1.6.1. Lifecycle Callbacks）。）  
+
+### 1.5.3. Singleton Beans with Prototype-bean Dependencies  
+当单例作用域的bean依赖原型作用域的bean，请注意，依赖关系在实例化时已解决。这样，你将依赖的原型bean注入到单例bean中，则将实例化新的原型bean，然后将依赖项到单例bean中。原型实例是曾经提供给单例范围的bean的唯一实例。  
+但是，假设您希望单例作用域的bean在运行时重复获取原型作用域的bean的新实例。你不能将原型作用域的bean注入到单例中，因为spring实例化单例bean的时候只会被注入一次他自己需要的依赖。如果你想在运行期间不止一次的获取原型bean的新对象，请参考1.4.6. Method Injection。  
+
+### 1.5.4. Request, Session, Application, and WebSocket Scopes  
+request, session, application, 和 websocket作用域只有使用web相关的容器（ApplicationContext ）才会用到，比如（XmlWebApplicationContext）。如果您将这些作用域与常规的Spring IoC容器（例如ClassPathXmlApplicationContext）一起使用，则会抛出一个IllegalStateException，该异常是一个未知的bean作用域。  
+#### 1.5.4.1. Initial Web Configuration   
+为了支持request, session, application, 和 websocket作用域，在定义bean之前，需要一些小的初始配置。（对于标准的作用域singleton 和 prototype，这些初始化步骤不是必须的。）  
+如何完成此初始设置取决于您的特定Servlet环境。  
+如果您在Spring Web MVC中访问作用域Bean，事实上，在由Spring DispatcherServlet处理的请求中，不需要特殊的设置。DispatcherServlet已经公开了所有相关状态。  
+如果你使用的是Servlet 2.5 的web容器，对于Spring的DispatcherServlet之外处理的请求（例如，在使用JSF或Struts时），您需要注册org.springframework.web.context.request.RequestContextListener ServletRequestListener。对于Servlet 3.0+，这可以通过使用WebApplicationInitializer接口以编程方式完成。 或者对于较旧的容器，将以下声明添加到Web应用程序的web.xml文件中：  
+~~~
+<web-app>
+    ...
+    <listener>
+        <listener-class>
+            org.springframework.web.context.request.RequestContextListener
+        </listener-class>
+    </listener>
+    ...
+</web-app>
+~~~  
+另外，如果您的监听器设置存在问题，请考虑使用Spring的RequestContextFilter。过滤器映射取决于周围的Web应用程序配置，因此您必须适当地对其进行更改。 以下清单显示了Web应用程序的过滤器部分：  
+~~~
+<web-app>
+    ...
+    <filter>
+        <filter-name>requestContextFilter</filter-name>
+        <filter-class>org.springframework.web.filter.RequestContextFilter</filter-class>
+    </filter>
+    <filter-mapping>
+        <filter-name>requestContextFilter</filter-name>
+        <url-pattern>/*</url-pattern>
+    </filter-mapping>
+    ...
+</web-app>
+~~~  
+DispatcherServlet，RequestContextListener和RequestContextFilter都做完全相同的事情，即将HTTP请求对象绑定到为该请求提供服务的线程。 这使得在请求链和会话范围内的Bean可以在调用链的更下游使用。  
+#### 1.5.4.2. Request scope  
+考虑下面的bean配置：  
+~~~
+<bean id="loginAction" class="com.something.LoginAction" scope="request"/>
+~~~  
+每次HTTP请求，spring容器使用loginAction 创建一个新的LoginAction的实例。也就是说，loginAction 的作用域是在HTTP层级上的。您可以根据需要更改创建实例的内部状态，因为从同一loginAction bean定义创建的其他实例看不到状态的这些变化。它们特定于单个请求。当请求完成处理时，将丢弃作用于该请求的Bean。  
+当使用注释驱动的组件或Java配置时，@ RequestScope注释可用于将组件标记为是request 作用域。 以下示例显示了如何执行此操作：  
+~~~
+@RequestScope
+@Component
+public class LoginAction {
+    // ...
+}
+~~~  
+#### 1.5.4.3. Session Scope  
+思考下面bean的配置：  
+~~~
+<bean id="userPreferences" class="com.something.UserPreferences" scope="session"/>
+~~~  
+Spring容器通过在单个HTTP会话的生存期内使用userPreferences 的beanDefinition来创建UserPreferences的新实例。换句话说，在HTTP session层级上，userPreferences 是有效的作用域。与请求范围的Bean一样，您可以根据需要任意更改所创建实例的内部状态，因为其他也在使用从同一userPreferences Bean定义创建的实例的HTTP Session实例也看不到这些状态变化 ，因为它们特定于单个HTTP会话。当HTTP会话最终被丢弃时，作用于该特定HTTP会话的bean也将被丢弃。  
+使用注解或Java配置时，可以使用@SessionScope注释将组件分配给会话范围。  
+~~~
+@SessionScope
+@Component
+public class UserPreferences {
+    // ...
+}
+~~~  
+~~~
+问题：
+1、如何理解HTTP 的session。
+~~~  
+#### 1.5.4.4. Application Scope  
+考虑下面的配置：  
+~~~
+<bean id="appPreferences" class="com.something.AppPreferences" scope="application"/>
+~~~  
+Spring容器通过对整个Web应用程序使用一次appPreferences bean定义来创建AppPreferences bean的新实例。 也就是说，appPreferences bean的作用域位于ServletContext级别，并存储为常规ServletContext属性。 这有点类似于Spring单例bean，但有两个重要的区别：它是每个ServletContext的单例，而不是每个Spring'ApplicationContext'的单例（在任何给定的Web应用程序中可能都有多个），并且实际上是公开的，因此 可见为ServletContext属性。  
+使用注解或Java配置时，可以使用@ApplicationScope注释将组件分配给应用程序范围。 以下示例显示了如何执行此操作：  
+~~~
+@ApplicationScope
+@Component
+public class AppPreferences {
+    // ...
+}
+~~~  
+#### 1.5.4.5. Scoped Beans as Dependencies  
+Spring IoC容器不仅管理对象（bean）的实例化，而且还管理协作者（或依赖项）的连接。如果要将（例如）HTTP请求范围的Bean注入（例如）另一个作用域更长的Bean，则可以选择注入AOP代理来代替作用域的Bean。也就是说，您需要注入一个代理对象，该对象与范围对象共用相同的公共接口，但也可以从相关范围（例如HTTP请求）中检索真实的目标对象，并将方法调用委托给真实的对象。  
+~~~
+注意：
+您还可以在单例bean之间使用<aop：scoped-proxy />，然后引用通过经过可序列化的中间代理，从而能够在反序列化时重新获得目标单例bean。
+
+当针对范围原型的bean声明<aop：scoped-proxy />时，共享代理上的每个方法调用都会导致创建新的目标实例，然后将该调用转发到该目标实例。
+
+同样，作用域代理不是以生命周期安全的方式从较短的作用域访问bean的唯一方法。 您也可以将注入点（即构造函数或setter参数或自动装配的字段）声明为ObjectFactory <MyTargetBean>，从而允许getObject（）调用在需要时按需检索当前实例。 实例或将其单独存储。
+
+作为扩展的变体，您可以声明ObjectProvider <MyTargetBean>，它提供了几个其他的访问变体，包括getIfAvailable和getIfUnique。
+
+JSR-330的这种变体称为Provider，并与Provider <MyTargetBean>声明和每次检索尝试的相应get（）调用一起使用。 有关JSR-330总体的更多详细信息，请参见此处1.11. Using JSR 330 Standard Annotations。
+~~~  
+以下示例中的配置只有一行，但是了解其背后的“原因”和“方式”很重要：  
+~~~
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xmlns:aop="http://www.springframework.org/schema/aop"
+    xsi:schemaLocation="http://www.springframework.org/schema/beans
+        https://www.springframework.org/schema/beans/spring-beans.xsd
+        http://www.springframework.org/schema/aop
+        https://www.springframework.org/schema/aop/spring-aop.xsd">
+
+    <!-- an HTTP Session-scoped bean exposed as a proxy -->
+    <bean id="userPreferences" class="com.something.UserPreferences" scope="session">
+        <!-- instructs the container to proxy the surrounding bean -->
+        <aop:scoped-proxy/> ①
+    </bean>
+
+    <!-- a singleton-scoped bean injected with a proxy to the above bean -->
+    <bean id="userService" class="com.something.SimpleUserService">
+        <!-- a reference to the proxied userPreferences bean -->
+        <property name="userPreferences" ref="userPreferences"/>
+    </bean>
+</beans>
+~~~
+①标记的地方定义了代理  
+
+要创建这样的代理，请将子\<aop：scoped-proxy />元素插入到有作用域的bean定义中（参考Choosing the Type of Proxy to Create和9.1.1. The util Schema）。为什么在request，session 和custom-scope 级别定义的beanDefinition都需要<aop：scoped-proxy />元素？考虑以下单例bean定义，并将其与您需要为上述范围定义的内容进行对比（请注意，以下userPreferences bean定义不完整）：  
+~~~
+<bean id="userPreferences" class="com.something.UserPreferences" scope="session"/>
+
+<bean id="userManager" class="com.something.UserManager">
+    <property name="userPreferences" ref="userPreferences"/>
+</bean>
+~~~  
+上例中，单例bean userManager 的属性依赖作用域为Session-scoped的bean userPreferences。这里的重点是userManager bean是单例的：每个容器只实例化一次，并且它的依赖项（在这种情况下，只有一个，userPreferences bean）也只注入一次。这意味着userManager bean仅在完全相同的userPreferences对象（即最初与之注入对象）上操作。  
+将寿命较短的作用域bean注入寿命较长的作用域bean时，这不是您想要的行为（例如，将HTTP会话范围的协作bean作为依赖项注入到singleton bean中）。
+相反，您只需要一个userManager对象，并且在HTTP会话的生存期内，您需要一个特定于HTTP会话的userPreferences对象。因此，容器创建一个对象，该对象公开与UserPreferences类完全相同的公共接口（理想情况下是一个UserPreferences实例的对象），该对象可以从作用域机制（HTTP请求，Session等）中获取实际的UserPreferences对象。 。 容器将此代理对象注入到userManager bean中，而后者不知道此UserPreferences引用是代理。（通过代理产生HTTP作用域的对象，然后注入到单例bean中）。在这个例子中，当UserManager 实例调用方法注入UserPreferences 依赖时，实际上他调用的是一个代理方法。然后，代理从HTTP会话（在本例中）获取真实的UserPreferences对象，并将方法调用委托给检索到的真实的UserPreferences对象。  
+因此，在将请求范围和会话范围的bean注入到协作对象中时，需要以下（正确和完整）配置，如以下示例所示：  
+~~~
+<bean id="userPreferences" class="com.something.UserPreferences" scope="session">
+    <aop:scoped-proxy/>
+</bean>
+
+<bean id="userManager" class="com.something.UserManager">
+    <property name="userPreferences" ref="userPreferences"/>
+</bean>
+~~~  
+##### Choosing the Type of Proxy to Create   
+默认情况下，当Spring容器为使用<aop：scoped-proxy />元素标记的bean创建代理时，将创建基于CGLIB的类代理。  
+~~~
+注意：
+CGLIB代理仅拦截公共方法调用！ 不要在此类代理上调用非公共方法。 它们没有被委派给实际的作用域目标对象。
+~~~  
+另外，您可以通过为<aop：scoped-proxy />元素的proxy-target-class属性值指定false，来配置Spring容器为此类作用域的bean创建基于标准JDK接口的代理。使用基于JDK接口的代理意味着您无需在应用程序类路径中引用其他库。但是，这也意味着作用域bean的类必须实现至少一个接口，并且作用域bean注入到其中的所有协作者都必须通过其接口之一引用该bean。以下示例显示基于接口的代理：  
+~~~
+<!-- DefaultUserPreferences implements the UserPreferences interface -->
+<bean id="userPreferences" class="com.stuff.DefaultUserPreferences" scope="session">
+    <aop:scoped-proxy proxy-target-class="false"/>
+</bean>
+
+<bean id="userManager" class="com.stuff.UserManager">
+    <property name="userPreferences" ref="userPreferences"/>
+</bean>
+~~~  
+有关选择基于类或基于接口的代理的更多详细信息，参考5.8. Proxying Mechanisms。  
+
+### 1.5.5. Custom Scopes  
+bean的作用域是可以扩展的。您可以定义自己的范围，甚至重新定义现有范围，尽管后者被认为是不好的做法，并且您不能覆盖内置的singleton和prototype 作用域。  
+#### Creating a Custom Scope  
+为了整合自定义作用域，需要实现本章介绍的org.springframework.beans.factory.config.Scope这个接口。有关如何实现自己的范围的想法，请参见Spring框架本身提供的Scope实现和Scope javadoc，其中详细介绍了需要实现的方法。  
+Scope接口有四种方法可以从作用域中获取对象，将它们从作用域中删除，然后销毁它们。  
+例如，session作用域实现返回session作用域的Bean（如果不存在，将返回该Bean的新实例，已将其绑定到会话以供将来参考）。 以下方法从基础范围返回对象：  
+~~~
+Object get(String name, ObjectFactory<?> objectFactory)
+~~~  
+session作用域实现，例如，删除了会话范围的Bean。应该返回该对象，但是如果找不到具有指定名称的对象，则可以返回null。 以下方法将对象从基础范围中删除：  
+~~~
+Object remove(String name)
+~~~  
+以下方法注册作用域的回调函数，销毁作用域或者作用域中的指定对象时应执行的回调：  
+~~~
+void registerDestructionCallback(String name, Runnable destructionCallback)
+~~~  
+有关销毁回调的更多信息，请参见javadoc（https://docs.spring.io/spring-framework/docs/5.2.6.RELEASE/javadoc-api/org/springframework/beans/factory/config/Scope.html#registerDestructionCallback） 或Spring范围实现。  
+以下方法获取基础范围的会话标识符：  
+~~~
+String getConversationId()
+~~~  
+每个范围的标识符都不相同。 对于会话范围的实现，此标识符可以是会话标识符。  
+#### Using a Custom Scope  
+当你写完并测试自定义作用域实现的时候，你需要告诉spring容易你的新作用域。下面的方法是个核心方法来注册一个新的自定义作用域：  
+~~~
+void registerScope(String scopeName, Scope scope);
+~~~  
+该方法声明在ConfigurableBeanFactory 接口中，该接口可通过Spring附带的大多数具体ApplicationContext实现上的BeanFactory属性获得。
+registerScope（..）方法的第一个参数是与作用域关联的唯一名称。例如spring中的singleton 和 prototype。第二个参数是实现了Scope 接口的具体实现类，该类中注册和使用。  
+假设您编写了自定义的Scope实现，然后注册它，如下面的示例所示。  
+~~~
+注意：
+下一个示例使用SimpleThreadScope，它包含在Spring中，但默认情况下未注册。 对于您自己的自定义范围实现，说明将是相同的。
+~~~  
+~~~
+Scope threadScope = new SimpleThreadScope();
+beanFactory.registerScope("thread", threadScope);
+~~~  
+然后，您可以按照您的自定义范围的作用域规则创建bean定义，如下所示：  
+~~~
+<bean id="..." class="..." scope="thread">
+~~~  
+使用自定义范围实现，您不仅限于以编程方式注册范围。 您还可以使用CustomScopeConfigurer类以声明方式进行范围注册，如以下示例所示：  
+~~~
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xmlns:aop="http://www.springframework.org/schema/aop"
+    xsi:schemaLocation="http://www.springframework.org/schema/beans
+        https://www.springframework.org/schema/beans/spring-beans.xsd
+        http://www.springframework.org/schema/aop
+        https://www.springframework.org/schema/aop/spring-aop.xsd">
+
+    <bean class="org.springframework.beans.factory.config.CustomScopeConfigurer">
+        <property name="scopes">
+            <map>
+                <entry key="thread">
+                    <bean class="org.springframework.context.support.SimpleThreadScope"/>
+                </entry>
+            </map>
+        </property>
+    </bean>
+
+    <bean id="thing2" class="x.y.Thing2" scope="thread">
+        <property name="name" value="Rick"/>
+        <aop:scoped-proxy/>
+    </bean>
+
+    <bean id="thing1" class="x.y.Thing1">
+        <property name="thing2" ref="thing2"/>
+    </bean>
+
+</beans>
+~~~  
+~~~
+注意：
+当将<aop：scoped-proxy />放置在FactoryBean实现中时，作用域是工厂bean本身，而不是从getObject（）返回的对象。
+~~~  
+
+## 1.6. Customizing the Nature of a Bean（自定义bean的属性）  
