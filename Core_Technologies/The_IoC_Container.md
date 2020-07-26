@@ -1477,3 +1477,91 @@ beanFactory.registerScope("thread", threadScope);
 ~~~  
 
 ## 1.6. Customizing the Nature of a Bean（自定义bean的属性）  
+spring框架提供了很多接口，你可以使用这些接口定义bean的属性。本章将他们分为如下部分：  
+
+- Lifecycle Callbacks
+
+- ApplicationContextAware and BeanNameAware
+
+- Other Aware Interfaces  
+
+### 1.6.1. Lifecycle Callbacks（生命周期回调）  
+为了与容器对bean生命周期的管理进行交互，您可以实现Spring InitializingBean和DisposableBean接口。容器为前者调用afterPropertiesSet（），为后者调用destroy（），以使Bean在初始化和销毁Bean时执行某些操作。  
+~~~
+JSR-250 @PostConstruct和@PreDestroy注解通常被认为是在现代Spring应用程序中接收生命周期回调的最佳实践。 使用这些注释意味着您的bean没有耦合到特定于Spring的接口。更多请参考：1.9.9. Using @PostConstruct and @PreDestroy
+如果不想使用JSR-250批注，但仍然想删除耦合，请考虑使用init-method和destroy-method Bean定义元数据。
+~~~    
+在内部，Spring框架使用BeanPostProcessor实现来处理它可以找到的任何回调接口并调用适当的方法。如果您需要自定义功能或其他生命周期行为，Spring默认不提供，则您可以自己实现BeanPostProcessor。详情参考：Customizing Beans by Using a BeanPostProcessor  
+除了初始化和销毁回调，Spring管理的对象还可以实现Lifecycle接口，以便这些对象可以在容器自身的生命周期的驱动下参与启动和关闭过程。  
+本节介绍了生命周期回调接口。  
+#### Initialization Callbacks  
+在容器给bean设置完必要的属性后，org.springframework.beans.factory.InitializingBean 接口会让bean执行初始化工作（也就说，容器初始化后就会调用InitializingBean接口的方法）。InitializingBean接口只有一个方法：  
+~~~
+void afterPropertiesSet() throws Exception;
+~~~  
+我们建议您不要使用InitializingBean接口，因为它不必要地将代码耦合到Spring。但是，我们建议使用@PostConstruct注解或指定POJO初始化方法。在xml配置文件中，你可以使用init-method属性指定无参数方法的名称。使用java configuration，你可以使用@Bean的initMethod属性。参考：Receiving Lifecycle Callbacks。  
+考虑下面的例子；  
+~~~
+<bean id="exampleInitBean" class="examples.ExampleBean" init-method="init"/>
+~~~  
+~~~
+public class ExampleBean {
+
+    public void init() {
+        // do some initialization work
+    }
+}  
+~~~  
+上面的例子和下面的例子效果相同  
+~~~
+<bean id="exampleInitBean" class="examples.AnotherExampleBean"/>
+~~~  
+~~~
+public class AnotherExampleBean implements InitializingBean {
+
+    @Override
+    public void afterPropertiesSet() {
+        // do some initialization work
+    }
+}
+~~~  
+但是上面两个例子中的第一个没有将代码耦合到Spring中。  
+#### Destruction Callbacks  
+通过实现org.springframework.beans.factory.DisposableBean接口，当此bean的容器被销毁时，它可以获取回调。 DisposableBean接口只有一个方法：  
+~~~
+void destroy() throws Exception;
+~~~  
+我们不建议使用DisposableBean回调接口，因为没必要耦合代码到spring中。但是，我们建议使用@PreDestroy注解或指定bean定义支持的通用方法。使用基于XML的配置元数据时，可以在\<bean />上使用destroy-method属性。通过Java配置，可以使用@Bean的destroyMethod属性。参考：Receiving Lifecycle Callbacks。  
+考虑下面的例子：  
+~~~
+<bean id="exampleInitBean" class="examples.ExampleBean" destroy-method="cleanup"/>
+~~~  
+~~~
+public class ExampleBean {
+
+    public void cleanup() {
+        // do some destruction work (like releasing pooled connections)
+    }
+}
+~~~  
+上面的例子和下面的例子效果一样：  
+~~~
+<bean id="exampleInitBean" class="examples.AnotherExampleBean"/>
+~~~  
+~~~
+public class AnotherExampleBean implements DisposableBean {
+
+    @Override
+    public void destroy() {
+        // do some destruction work (like releasing pooled connections)
+    }
+}
+~~~  
+但是上面两个例子中的第一个没有将代码耦合到Spring中。  
+~~~
+注意：
+您可以为<bean>元素的destroy-method属性分配一个特殊的（推断的）值，该值指示Spring自动检测特定bean类上的public close 方法。（因此，任何实现java.lang.AutoCloseable或java.io.Closeable的类都将匹配。）您还可以在<beans>元素的default-destroy-method属性上设置此特殊（推断）值，以将此行为应用于 一整套bean（请参阅Default Initialization and Destroy Methods）。 请注意，这是Java配置的默认行为。
+~~~  
+#### Default Initialization and Destroy Methods  
+当编写不使用Spring特定的InitializingBean和DisposableBean回调接口的初始化和销毁方法回调时，通常会编写诸如init（），initialize（），dispose（）等名称的方法。理想情况下，此类生命周期回调方法的名称应在整个项目中标准化，以便所有开发人员都使用相同的方法名称并确保一致性。  
+您可以配置Spring容器以“查找”命名的初始化，并销毁每个bean上的回调方法名称。
